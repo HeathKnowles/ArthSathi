@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import React, { useState } from "react";
-import { FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from "react";
+import { Animated, Easing, FlatList, KeyboardAvoidingView, Platform, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
 
 export default function LearnScreen() {
   const [query, setQuery] = useState('');
@@ -9,6 +9,7 @@ export default function LearnScreen() {
     { id: '1', sender: 'bot', text: 'Hi! Ask me anything about finance, SIP, or risk profiling.' },
   ]);
   const [loading, setLoading] = useState(false);
+  const inputAnim = useRef(new Animated.Value(0)).current;
 
   const handleSend = async () => {
     if (!query.trim()) return;
@@ -17,8 +18,14 @@ export default function LearnScreen() {
       { id: String(prev.length + 1), sender: 'user', text: query },
     ]);
     setLoading(true);
+    Animated.timing(inputAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.exp),
+    }).start();
     try {
-  const res = await fetch('http://10.124.253.191:3001/ask', {
+      const res = await fetch('http://10.124.253.191:3001/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ question: query }),
@@ -36,34 +43,47 @@ export default function LearnScreen() {
     }
     setQuery('');
     setLoading(false);
+    Animated.timing(inputAnim, {
+      toValue: 0,
+      duration: 300,
+      useNativeDriver: true,
+      easing: Easing.out(Easing.exp),
+    }).start();
   };
+
+  const renderItem = ({ item }: any) => (
+    <Animated.View style={[styles.message, item.sender === 'user' ? styles.userMsg : styles.botMsg, {
+      transform: [{ scale: item.sender === 'user' ? 1.05 : 1 }],
+      opacity: 1,
+    }]}> 
+      <ThemedText style={{ color: item.sender === 'user' ? '#4A90E2' : '#1D3D47', fontWeight: '500' }}>{item.text}</ThemedText>
+    </Animated.View>
+  );
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ThemedView style={styles.container}>
-        <ThemedText type="title" style={{ marginBottom: 16 }}>Learn</ThemedText>
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Ask a question (e.g. What is SIP?)"
-          value={query}
-          onChangeText={setQuery}
-          onSubmitEditing={handleSend}
-          returnKeyType="send"
-        />
+        <ThemedText type="title" style={styles.title}>Learn</ThemedText>
         <FlatList
           data={messages}
           keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <View style={[styles.message, item.sender === 'user' ? styles.userMsg : styles.botMsg]}>
-              <ThemedText>{item.text}</ThemedText>
-            </View>
-          )}
-          style={styles.chat}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: 80 }}
         />
-        {loading && <View style={{ alignItems: 'center', marginBottom: 8 }}><ThemedText>Loading...</ThemedText></View>}
-        <TouchableOpacity style={styles.sendButton} onPress={handleSend} disabled={loading}>
-          <ThemedText style={{ color: 'white', fontWeight: 'bold' }}>Send</ThemedText>
-        </TouchableOpacity>
+        <Animated.View style={[styles.inputBar, { transform: [{ translateY: inputAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -10] }) }] }] }>
+          <TextInput
+            style={styles.searchBar}
+            placeholder="Ask a question (e.g. What is SIP?)"
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSend}
+            returnKeyType="send"
+            editable={!loading}
+          />
+          <TouchableOpacity style={styles.sendBtn} onPress={handleSend} disabled={loading}>
+            <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>{loading ? '...' : 'Send'}</ThemedText>
+          </TouchableOpacity>
+        </Animated.View>
       </ThemedView>
     </KeyboardAvoidingView>
   );
@@ -72,40 +92,66 @@ export default function LearnScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#E0F7FA',
     padding: 16,
-    backgroundColor: 'transparent',
   },
-  searchBar: {
-    borderWidth: 1,
-    borderColor: '#A1CEDC',
-    borderRadius: 12,
-    padding: 12,
+  title: {
     marginBottom: 16,
-    backgroundColor: '#fff',
-  },
-  chat: {
-    flex: 1,
-    marginBottom: 16,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1D3D47',
+    textAlign: 'center',
   },
   message: {
-    padding: 10,
-    borderRadius: 8,
-    marginVertical: 4,
-    maxWidth: '80%',
+    marginVertical: 8,
+    padding: 14,
+    borderRadius: 16,
+    maxWidth: '85%',
+    alignSelf: 'flex-start',
+    backgroundColor: '#fff',
+    elevation: 2,
+    shadowColor: '#A1CEDC',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
   userMsg: {
     alignSelf: 'flex-end',
-    backgroundColor: '#A1CEDC',
+    backgroundColor: '#D0F0FF',
   },
   botMsg: {
     alignSelf: 'flex-start',
-    backgroundColor: '#E0E0E0',
+    backgroundColor: '#fff',
   },
-  sendButton: {
-    backgroundColor: '#1D3D47',
-    padding: 14,
-    borderRadius: 12,
+  inputBar: {
+    position: 'absolute',
+    bottom: 16,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 8,
+    elevation: 4,
+    shadowColor: '#A1CEDC',
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  searchBar: {
+    flex: 1,
+    padding: 12,
+    fontSize: 16,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    marginRight: 8,
+  },
+  sendBtn: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 12,
+    elevation: 2,
   },
 });

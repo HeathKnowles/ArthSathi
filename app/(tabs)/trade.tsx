@@ -1,7 +1,7 @@
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
-import React, { useState } from 'react';
-import { FlatList, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { Animated, Easing, FlatList, StyleSheet, TextInput, TouchableOpacity, View } from 'react-native';
 
 const STATIC_PRICES: Record<string, number> = {
   RELIANCE: 2500,
@@ -21,8 +21,23 @@ export default function TradeScreen() {
   const [action, setAction] = useState('BUY');
   const [message, setMessage] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<{ type: string; symbol: string; qty: number; price: number; time: string }>>([]);
+  const tradeAnim = useRef(new Animated.Value(1)).current;
 
   const handleTrade = () => {
+    Animated.sequence([
+      Animated.timing(tradeAnim, {
+        toValue: 0.97,
+        duration: 100,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+      Animated.timing(tradeAnim, {
+        toValue: 1,
+        duration: 150,
+        useNativeDriver: true,
+        easing: Easing.out(Easing.quad),
+      }),
+    ]).start();
     const qty = parseInt(quantity);
     const key = symbol.toUpperCase();
     const price = STATIC_PRICES[key];
@@ -66,27 +81,12 @@ export default function TradeScreen() {
     setQuantity('');
   };
 
-  const handleReset = () => {
-    setBalance(INITIAL_BALANCE);
-    setPortfolio({});
-    setHistory([]);
-    setMessage('Game reset!');
-  };
-
-  const portfolioList: [string, number][] = Object.entries(portfolio).filter(([_, qty]) => qty > 0) as [string, number][];
-
   return (
     <ThemedView style={styles.container}>
-      <ThemedText type="title" style={{ marginBottom: 16 }}>Trade</ThemedText>
-      <ThemedText style={styles.balance}>Balance: ₹{balance.toLocaleString()}</ThemedText>
-      <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
-        <ThemedText style={{ color: '#1D3D47', fontWeight: 'bold' }}>Reset Game</ThemedText>
-      </TouchableOpacity>
-      {message && (
-        <View style={styles.messageBox}>
-          <ThemedText>{message}</ThemedText>
-        </View>
-      )}
+      <ThemedText type="title" style={styles.title}>Trade</ThemedText>
+      <View style={styles.balanceBox}>
+        <ThemedText style={styles.balanceText}>Balance: ₹{balance}</ThemedText>
+      </View>
       <View style={styles.inputRow}>
         <TextInput
           style={styles.input}
@@ -101,48 +101,45 @@ export default function TradeScreen() {
           onChangeText={setQuantity}
           keyboardType="numeric"
         />
-      </View>
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={[styles.actionBtn, action === 'BUY' && styles.selected]} onPress={() => setAction('BUY')}>
-          <ThemedText style={styles.actionText}>Buy</ThemedText>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.actionBtn, action === 'SELL' && styles.selected]} onPress={() => setAction('SELL')}>
-          <ThemedText style={styles.actionText}>Sell</ThemedText>
+        <TouchableOpacity
+          style={[styles.actionBtn, { backgroundColor: action === 'BUY' ? '#4A90E2' : '#50E3C2' }]}
+          onPress={() => setAction(action === 'BUY' ? 'SELL' : 'BUY')}
+        >
+          <ThemedText style={{ color: '#fff', fontWeight: 'bold' }}>{action}</ThemedText>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity style={styles.tradeBtn} onPress={handleTrade}>
-        <ThemedText style={{ color: 'white', fontWeight: 'bold' }}>{action}</ThemedText>
-      </TouchableOpacity>
-  <ThemedText type="subtitle" style={{ marginTop: 24 }}>Portfolio</ThemedText>
+      <Animated.View style={{ transform: [{ scale: tradeAnim }] }}>
+        <TouchableOpacity style={styles.tradeBtn} onPress={handleTrade}>
+          <ThemedText style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Execute Trade</ThemedText>
+        </TouchableOpacity>
+      </Animated.View>
+      {message && <ThemedText style={styles.message}>{message}</ThemedText>}
+      <ThemedText style={styles.portfolioTitle}>Portfolio</ThemedText>
       <FlatList
-        data={portfolioList}
+        data={Object.entries(portfolio).filter(([_, qty]) => qty > 0)}
         keyExtractor={([symbol]) => symbol}
-        renderItem={({ item }) => {
-          const [symbol, qty] = item;
-          return (
-            <View style={styles.portfolioItem}>
-              <ThemedText>{symbol}</ThemedText>
-              <ThemedText>Qty: {qty}</ThemedText>
-              <ThemedText>Price: ₹{STATIC_PRICES[symbol]}</ThemedText>
-            </View>
-          );
-        }}
-        ListEmptyComponent={<ThemedText>No holdings yet.</ThemedText>}
-        style={{ marginTop: 8 }}
-      />
-
-      <ThemedText type="subtitle" style={{ marginTop: 24 }}>Transaction History</ThemedText>
-      <FlatList
-        data={history}
-        keyExtractor={(_, i) => String(i)}
         renderItem={({ item }) => (
-          <View style={styles.historyItem}>
-            <ThemedText>{item.time}</ThemedText>
-            <ThemedText>{item.type} {item.qty} {item.symbol} @ ₹{item.price}</ThemedText>
+          <View style={styles.portfolioItem}>
+            <ThemedText style={styles.portfolioSymbol}>{item[0]}</ThemedText>
+            <ThemedText style={styles.portfolioQty}>Qty: {item[1]}</ThemedText>
           </View>
         )}
-        ListEmptyComponent={<ThemedText>No trades yet.</ThemedText>}
-        style={{ marginTop: 8 }}
+        ListEmptyComponent={<ThemedText style={styles.emptyPortfolio}>No holdings yet.</ThemedText>}
+      />
+      <ThemedText style={styles.historyTitle}>History</ThemedText>
+      <FlatList
+        data={history}
+        keyExtractor={(_, idx) => String(idx)}
+        renderItem={({ item }) => (
+          <View style={styles.historyItem}>
+            <ThemedText style={{ color: item.type === 'BUY' ? '#4A90E2' : '#50E3C2', fontWeight: 'bold' }}>{item.type}</ThemedText>
+            <ThemedText>{item.symbol}</ThemedText>
+            <ThemedText>Qty: {item.qty}</ThemedText>
+            <ThemedText>₹{item.price}</ThemedText>
+            <ThemedText style={{ fontSize: 12, color: '#888' }}>{item.time}</ThemedText>
+          </View>
+        )}
+        ListEmptyComponent={<ThemedText style={styles.emptyHistory}>No trades yet.</ThemedText>}
       />
     </ThemedView>
   );
@@ -151,80 +148,113 @@ export default function TradeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
     padding: 16,
-    backgroundColor: 'transparent',
   },
-  balance: {
-    fontWeight: 'bold',
+  title: {
     marginBottom: 16,
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#1D3D47',
+    textAlign: 'center',
+  },
+  balanceBox: {
+    backgroundColor: '#E0F7FA',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  balanceText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#4A90E2',
   },
   inputRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 8,
     marginBottom: 12,
   },
   input: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: '#A1CEDC',
-    borderRadius: 12,
-    padding: 12,
+    padding: 10,
+    borderRadius: 10,
     backgroundColor: '#fff',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
+    fontSize: 16,
+    elevation: 1,
   },
   actionBtn: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: '#E0E0E0',
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    elevation: 2,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  selected: {
-    backgroundColor: '#A1CEDC',
+  tradeBtn: {
+    backgroundColor: '#4A90E2',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 8,
+    elevation: 4,
   },
-  actionText: {
+  message: {
+    color: '#D0021B',
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  portfolioTitle: {
+    marginTop: 16,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#1D3D47',
   },
-  tradeBtn: {
-    backgroundColor: '#1D3D47',
-    padding: 14,
+  portfolioItem: {
+    flexDirection: 'row',
+    gap: 16,
+    backgroundColor: '#E0F7FA',
     borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  resetBtn: {
-    backgroundColor: '#E0E0E0',
     padding: 10,
-    borderRadius: 12,
+    marginVertical: 4,
     alignItems: 'center',
-    marginBottom: 8,
+    elevation: 1,
   },
-  messageBox: {
-    backgroundColor: '#FFF8E1',
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
-    alignItems: 'center',
+  portfolioSymbol: {
+    fontWeight: 'bold',
+    color: '#4A90E2',
+  },
+  portfolioQty: {
+    color: '#1D3D47',
+  },
+  emptyPortfolio: {
+    color: '#888',
+    fontStyle: 'italic',
+    marginVertical: 8,
+    textAlign: 'center',
+  },
+  historyTitle: {
+    marginTop: 16,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1D3D47',
   },
   historyItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 10,
     padding: 8,
-    borderRadius: 8,
-    backgroundColor: '#E0F7FA',
     marginVertical: 2,
+    alignItems: 'center',
+    elevation: 1,
   },
-  portfolioItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    padding: 10,
-    borderRadius: 8,
-    backgroundColor: '#F5F5F5',
-    marginVertical: 4,
+  emptyHistory: {
+    color: '#888',
+    fontStyle: 'italic',
+    marginVertical: 8,
+    textAlign: 'center',
   },
 });
